@@ -23,7 +23,13 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "转化工具"))
 
 class EvalLauncher:
     def __init__(self):
-        self.root = tk.Tk()
+        try:
+            from tkinterdnd2 import TkinterDnD
+            self.root = TkinterDnD.Tk()
+            self._dnd_available = True
+        except ImportError:
+            self.root = tk.Tk()
+            self._dnd_available = False
         self.root.title("数学智能体评测器")
         self.root.geometry("520x420")
         self.root.resizable(True, True)
