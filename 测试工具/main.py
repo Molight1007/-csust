@@ -15,7 +15,7 @@ import tempfile
 # Add current dir to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import load_config, validate_config, ConfigError
+from config import load_config, validate_config, ConfigError, save_config, has_config
 from loader import load_problems
 from intern_s1 import run_inference
 from deepseek import run_judge

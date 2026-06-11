@@ -12,6 +12,11 @@ if not defined PYTHON (
     exit /b 1
 )
 
-echo Using Python: %PYTHON%
-"%PYTHON%" "测试工具\launcher.py"
-pause
+echo Starting Math Evaluator...
+"%PYTHON%" "测试工具\launcher.py" 2>"%TEMP%\math_eval_error.log"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Program crashed. See log below:
+    type "%TEMP%\math_eval_error.log"
+    pause
+)
