@@ -218,17 +218,34 @@ class QuestionBankDB:
         """
         从指定题库中随机选取 count 道题目。
         domain 可选，用于按领域筛选。
+
+        优化：用 Python random.sample + 两步查询替代 ORDER BY RANDOM()，
+        避免 SQLite 全表扫描+排序的 O(n log n) 开销。
         """
-        query = "SELECT problem_id, question, domain, reference_answer FROM problems WHERE bank_name = ?"
-        params = [bank_name]
+        # 第一步：只查询符合条件的 ID 列表（轻量查询）
+        id_query = "SELECT problem_id FROM problems WHERE bank_name = ?"
+        params: list = [bank_name]
         if domain:
-            query += " AND domain = ?"
+            id_query += " AND domain = ?"
             params.append(domain)
-        query += " ORDER BY RANDOM() LIMIT ?"
-        params.append(count)
 
         with self._connect() as conn:
-            rows = conn.execute(query, params).fetchall()
+            rows = conn.execute(id_query, params).fetchall()
+        all_ids = [r["problem_id"] for r in rows]
+
+        if not all_ids:
+            return []
+
+        # Python 层随机采样（O(k) 操作，远快于 SQL 层 RANDOM 排序）
+        sampled_ids = random.sample(all_ids, min(count, len(all_ids)))
+
+        # 第二步：精确查询选中的题目内容
+        placeholders = ",".join("?" for _ in sampled_ids)
+        query = f"SELECT problem_id, question, domain, reference_answer FROM problems WHERE problem_id IN ({placeholders})"
+
+        with self._connect() as conn:
+            rows = conn.execute(query, sampled_ids).fetchall()
+
         return [
             Problem(id=r["problem_id"], question=r["question"], domain=r["domain"] or None, reference_answer=r["reference_answer"] or None)
             for r in rows

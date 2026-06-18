@@ -46,6 +46,42 @@ class JudgeResult:
 
 
 @dataclass
+class LeanVerificationResult:
+    """Lean 形式化验证结果 - 将推理转化为 Lean 代码并编译验证的完整信息"""
+    problem_id: str = ""                          # 对应的题目ID
+    verified: bool = False                        # 是否执行了 Lean 验证
+    lean_available: bool = False                  # Lean 环境是否可用
+    # 转化阶段
+    lean_code: str = ""                           # 转化后的 Lean 4 代码
+    formalized_claim: str = ""                    # 形式化后的命题描述（中文）
+    conversion_tokens: int = 0                    # 转化阶段消耗 token
+    conversion_latency: float = 0.0               # 转化耗时（秒）
+    conversion_error: Optional[str] = None        # 转化过程中的错误
+    # 编译阶段
+    compile_passed: Optional[bool] = None         # Lean 编译是否通过（None=未编译）
+    compile_output: str = ""                      # 编译输出（stdout + stderr）
+    compile_latency: float = 0.0                  # 编译耗时（秒）
+    compile_timeout: bool = False                 # 编译是否超时
+    # 分析阶段
+    analysis_performed: bool = False              # 是否执行了错误分析
+    error_category: Optional[str] = None          # 错误类别：translation_error / logic_error / both / uncertain
+    analysis_confidence: float = 0.0              # 分析置信度
+    human_readable_error: str = ""                # 人类可读的错误解释
+    root_cause: str = ""                          # 根因分析（中文）
+    logic_flaw_location: str = ""                 # 逻辑错误定位（推理中哪一步有问题）
+    logic_flaw_why: str = ""                      # 逻辑错误原因
+    correct_approach: str = ""                    # 正确的做法
+    translation_issue: str = ""                   # 转化问题描述
+    fix_prompt_for_ai: str = ""                   # 修正提示词（可反馈给书生AI）
+    analysis_tokens: int = 0                      # 分析阶段消耗 token
+    analysis_latency: float = 0.0                 # 分析耗时（秒）
+    analysis_error: Optional[str] = None          # 分析过程中的错误
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
 class EvaluationResult:
     """评测最终结果 - 合并推理和评判的完整信息"""
     problem_id: str                               # 题目ID
@@ -67,6 +103,7 @@ class EvaluationResult:
     judge_latency: float = 0.0                    # 评判耗时
     inference_error: Optional[str] = None         # 推理错误
     judge_error: Optional[str] = None             # 评判错误
+    lean_verification: Optional[dict] = None      # Lean 验证结果（LeanVerificationResult.to_dict()）
 
     def to_dict(self) -> dict:
         """将结果转为字典，用于 JSON 序列化"""
