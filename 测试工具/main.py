@@ -35,7 +35,6 @@ if os.path.isdir(_ELAN_BIN) and _ELAN_BIN not in os.environ.get("PATH", ""):
 # ===== 项目模块导入 =====
 from config import load_config, validate_config, ConfigError
 from loader import load_problems
-from intern_s1 import run_inference
 from deepseek import run_judge, run_judge_batch
 from aggregator import merge_result
 from reporter import generate_json_report, generate_html_report, print_summary
@@ -44,6 +43,24 @@ from lean_verifier import (
     should_verify_lean,
     run_lean_verification_batch,
 )
+
+# run_inference 延迟导入：默认使用原版，--optimized 时切换为独立版
+_run_inference_func = None
+
+
+def _get_run_inference():
+    """获取当前使用的 run_inference 函数（支持原版/独立版切换）"""
+    global _run_inference_func
+    if _run_inference_func is None:
+        from intern_s1 import run_inference as _default_inference
+        _run_inference_func = _default_inference
+    return _run_inference_func
+
+
+def _set_run_inference(func):
+    """设置 run_inference 函数（用于 --optimized 切换）"""
+    global _run_inference_func
+    _run_inference_func = func
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +236,7 @@ async def evaluate_single(problem, semaphore, bank_name=None):
         EvaluationResult 对象
     """
     async with semaphore:
-        inference = await run_inference(problem)
+        inference = await _get_run_inference()(problem)
         if inference.error:
             judge = JudgeResult(
                 problem_id=problem.id,
@@ -258,7 +275,7 @@ async def _run_inference_stage(problems, concurrency, bank_name=None):
 
     async def _inference_task(problem):
         async with semaphore:
-            inference = await run_inference(problem)
+            inference = await _get_run_inference()(problem)
             ref_answer, ref_source = _lookup_reference_answer(
                 bank_name, problem.id
             ) if bank_name and not inference.error else (None, None)
@@ -782,6 +799,10 @@ def main():
         "--no-lean", action="store_true",
         help="跳过 Lean 形式化验证阶段",
     )
+    parser.add_argument(
+        "--optimized", action="store_true",
+        help="使用独立版 Intern-S1 推理模块（intern_s1_optimized/）",
+    )
 
     # 答案导入相关参数
     parser.add_argument(
@@ -807,6 +828,20 @@ def main():
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
+
+    # 切换为独立版 Intern-S1 推理模块
+    if args.optimized:
+        _optimized_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "intern_s1_optimized",
+        )
+        if os.path.isdir(_optimized_dir):
+            sys.path.insert(0, os.path.dirname(_optimized_dir))
+            from intern_s1_optimized.intern_s1 import run_inference as _optimized_inference
+            _set_run_inference(_optimized_inference)
+            print("[INFO] 使用独立版 Intern-S1 推理模块 (intern_s1_optimized/)")
+        else:
+            print(f"[WARNING] 独立版目录不存在: {_optimized_dir}，回退到原版")
 
     # 命令: 查看答案映射统计
     if args.bank_stats:
